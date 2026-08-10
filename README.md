@@ -17,6 +17,410 @@ This project demonstrates enterprise-grade capabilities:
 * **Governance**: Unity Catalog integration, PII handling, audit trails
 * **Databricks App Frontend**: Interactive Streamlit-based investigation dashboard
 
+## System Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Databricks AI Insurance Claims                    │
+│                        Intelligence Platform                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           Presentation Layer                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐     │
+│  │  Streamlit App   │  │  Databricks SQL  │  │  REST APIs       │     │
+│  │  (Dashboard UI)  │  │  (Dashboards)    │  │  (External)      │     │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Application Layer                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐         │
+│  │              Multi-Agent Orchestration System              │         │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │         │
+│  │  │ Router Agent │→ │ Fraud Agent  │  │ Medical Agent│    │         │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘    │         │
+│  │  ┌──────────────┐  ┌──────────────┐                       │         │
+│  │  │ Legal Agent  │  │Financial Agent│                       │         │
+│  │  └──────────────┘  └──────────────┘                       │         │
+│  └────────────────────────────────────────────────────────────┘         │
+│                                    ↓                                     │
+│  ┌────────────────────────────────────────────────────────────┐         │
+│  │                   MCP Tool Server (10 Tools)               │         │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │         │
+│  │  │Claim Details │  │ Fraud Score  │  │Similar Claims│    │         │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘    │         │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │         │
+│  │  │Policy Verify │  │Medical Lookup│  │Update Status │    │         │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘    │         │
+│  └────────────────────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ML & AI Services Layer                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐     │
+│  │  XGBoost Fraud   │  │ Vector Search    │  │  MLflow Model    │     │
+│  │  Detection Model │  │ (Embeddings)     │  │  Registry        │     │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Data Layer (Delta Lake)                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐         │
+│  │                    Gold Layer (Business)                   │         │
+│  │  • Claims Summary  • Fraud Alerts  • Agent Performance     │         │
+│  │  • Audit Trails    • Investigation Notes & Tasks           │         │
+│  └────────────────────────────────────────────────────────────┘         │
+│                               ↑                                          │
+│  ┌────────────────────────────────────────────────────────────┐         │
+│  │                    Silver Layer (Cleansed)                 │         │
+│  │  • Claims Enriched  • Fraud Features  • Embeddings         │         │
+│  └────────────────────────────────────────────────────────────┘         │
+│                               ↑                                          │
+│  ┌────────────────────────────────────────────────────────────┐         │
+│  │                     Bronze Layer (Raw)                     │         │
+│  │  • Claims  • Policies  • Claimants  • External Data        │         │
+│  └────────────────────────────────────────────────────────────┘         │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        External Integrations                             │
+├─────────────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐     │
+│  │  Open-Meteo API  │  │  Nominatim       │  │  Future APIs     │     │
+│  │  (Weather Data)  │  │  (Geocoding)     │  │  (Expandable)    │     │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Component Architecture
+
+#### 1. **Presentation Layer**
+
+**Streamlit Application (`databricks_app.py`)**
+* **Purpose**: Interactive web-based investigation dashboard
+* **Pages**:
+  * Executive Dashboard: KPIs, metrics, high-risk claims
+  * Claim Search: Advanced filtering and search capabilities
+  * AI Investigation: Multi-agent orchestrated investigations
+  * Investigation Notes: Note and task management
+  * Analytics: Time series and predictive insights
+* **Technology**: Streamlit, Plotly, Pandas
+* **Deployment**: Databricks Apps (serverless)
+
+**Databricks SQL Dashboards**
+* Real-time monitoring and executive reporting
+* Connected to Gold layer aggregations
+* Auto-refresh for live metrics
+
+#### 2. **Application Layer**
+
+**Multi-Agent Orchestration System (`multi_agent.py`)**
+```
+Router Agent (Central Coordinator)
+    │
+    ├──→ Fraud Detection Agent
+    │    • ML model scoring
+    │    • Pattern recognition
+    │    • Risk assessment
+    │
+    ├──→ Legal Compliance Agent
+    │    • Policy verification
+    │    • Regulatory checks
+    │    • Coverage validation
+    │
+    ├──→ Medical Review Agent
+    │    • Diagnosis code analysis
+    │    • Treatment appropriateness
+    │    • Medical necessity
+    │
+    └──→ Financial Analysis Agent
+         • Cost benchmarking
+         • Reserve calculations
+         • Payment history analysis
+```
+
+**Architecture Patterns**:
+* **Router Pattern**: Central agent distributes work to specialists
+* **Event-Driven**: Asynchronous agent communication
+* **Stateful**: Investigation state persisted in Gold layer
+* **Fault-Tolerant**: Graceful degradation when services unavailable
+
+**MCP Tool Server (`mcp_server.py`)**
+* **Protocol**: Model Context Protocol (MCP) standard
+* **Tool Categories**:
+  * **Read Tools (7)**: Non-destructive data retrieval
+  * **Write Tools (3)**: State-changing operations with audit
+* **Features**:
+  * Automatic retry with exponential backoff
+  * Circuit breaker pattern for external APIs
+  * Request/response logging
+  * Error handling and graceful degradation
+
+#### 3. **ML & AI Services Layer**
+
+**Fraud Detection Model**
+* **Algorithm**: XGBoost Gradient Boosting
+* **Input Features**: 25+ engineered features
+* **Output**: Fraud probability (0.0-1.0) + risk level (LOW/MEDIUM/HIGH)
+* **Deployment**: Unity Catalog Model Registry → MLflow Model Serving
+* **Versioning**: Production/Latest aliases for A/B testing
+* **Monitoring**: MLflow tracking for drift detection
+
+**Vector Search**
+* **Embedding Model**: SentenceTransformers (all-MiniLM-L6-v2)
+* **Dimensionality**: 384-dimensional vectors
+* **Index Type**: Databricks Vector Search (HNSW algorithm)
+* **Use Cases**: Similar claim detection, pattern matching
+* **Fallback**: Manual cosine similarity if index unavailable
+
+**Evaluation Framework (`evaluation_framework.py`)**
+* **Automated Metrics**: Precision, recall, F1-score
+* **Human Feedback**: 5-point Likert scale from adjusters
+* **A/B Testing**: Compare agent strategies
+* **Continuous Learning**: Model retraining pipeline
+
+#### 4. **Data Layer Architecture**
+
+**Medallion Architecture (Bronze → Silver → Gold)**
+
+**Bronze Layer (Raw Ingestion)**
+```sql
+main.insurance_claims.bronze_claims
+main.insurance_claims.bronze_policies
+main.insurance_claims.bronze_claimants
+main.insurance_claims.bronze_external_enrichment
+```
+* **Purpose**: Land raw data with no transformations
+* **Format**: Delta Lake with schema enforcement
+* **Governance**: Unity Catalog managed
+* **Retention**: 7 years (compliance requirement)
+
+**Silver Layer (Cleansed & Enriched)**
+```sql
+main.insurance_claims.silver_claims_enriched
+main.insurance_claims.silver_fraud_features
+main.insurance_claims.claims_embeddings
+```
+* **Purpose**: Clean, validated, enriched data
+* **Transformations**:
+  * Data quality checks
+  * Deduplication
+  * Standardization (dates, amounts, codes)
+  * Weather data enrichment
+  * Feature engineering
+  * Embedding generation
+* **Quality Expectations**: Automated Delta Live Tables checks
+
+**Gold Layer (Business Aggregations)**
+```sql
+main.insurance_claims.gold_claims_summary
+main.insurance_claims.gold_fraud_alerts
+main.insurance_claims.gold_agent_performance
+main.insurance_claims.gold_claim_status_audit
+main.insurance_claims.gold_investigation_notes
+main.insurance_claims.gold_investigation_tasks
+```
+* **Purpose**: Business-level metrics and analytics
+* **Consumers**: Dashboards, reporting, ML features
+* **Refresh**: Incremental updates via streaming
+
+### Data Flow Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Claim Investigation Flow                     │
+└─────────────────────────────────────────────────────────────────┘
+
+1. User selects claim in Streamlit App
+        ↓
+2. Router Agent receives investigation request
+        ↓
+3. Router calls MCP Tool: get_claim_details
+        ↓ (reads from Silver layer)
+4. Router analyzes claim and determines specialist agents
+        ↓
+5. Parallel agent execution:
+   ├──→ Fraud Agent calls fraud_risk_score (ML model)
+   ├──→ Legal Agent calls policy_verification
+   ├──→ Medical Agent calls medical_code_lookup
+   └──→ Financial Agent calls payment_history
+        ↓ (each tool queries Silver/Gold layers)
+6. Router calls similar_claims_search (Vector Search)
+        ↓
+7. Router calls external_data_enrichment (Open-Meteo API)
+        ↓ (stores in bronze_external_enrichment)
+8. Router aggregates all agent responses
+        ↓
+9. Router generates unified recommendation
+        ↓
+10. User reviews and takes action:
+    ├──→ update_claim_status (writes to Gold layer)
+    ├──→ add_investigation_note (writes to Gold layer)
+    └──→ assign_investigation_task (writes to Gold layer)
+        ↓
+11. All actions logged to gold_claim_status_audit
+        ↓
+12. Results displayed in Streamlit App with visualizations
+```
+
+### Integration Architecture
+
+**External API Integrations**
+
+1. **Open-Meteo Weather API**
+   * **Endpoint**: `https://archive-api.open-meteo.com/v1/archive`
+   * **Authentication**: None (free tier)
+   * **Rate Limiting**: 10,000 requests/day
+   * **Retry Strategy**: Exponential backoff (3 attempts)
+   * **Caching**: Results stored in `bronze_external_enrichment`
+   * **Data Retrieved**: Temperature, precipitation, wind speed, conditions
+
+2. **Nominatim Geocoding**
+   * **Purpose**: Convert state names to coordinates for weather API
+   * **Endpoint**: OpenStreetMap Nominatim service
+   * **Caching**: In-memory state coordinate mapping
+
+**Internal Integrations**
+
+1. **Unity Catalog**
+   * Centralized metadata management
+   * Fine-grained access control (GRANT/REVOKE)
+   * Data lineage tracking
+   * PII tagging and masking
+
+2. **MLflow**
+   * Experiment tracking
+   * Model registry (versioning)
+   * Model serving endpoints
+   * Metric logging
+
+3. **Databricks Vector Search**
+   * Embedding storage and indexing
+   * Similarity search queries
+   * Real-time updates
+
+### Deployment Architecture
+
+**Compute Resources**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Databricks Workspace                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────────────────────────────────┐              │
+│  │      Job Clusters (ETL Pipelines)        │              │
+│  │  • Bronze ingestion: 4 workers           │              │
+│  │  • Silver transformation: 8 workers       │              │
+│  │  • Gold aggregation: 4 workers            │              │
+│  │  • ML training: 8 workers (GPU optional) │              │
+│  └──────────────────────────────────────────┘              │
+│                                                             │
+│  ┌──────────────────────────────────────────┐              │
+│  │   Serverless SQL Warehouses (Queries)    │              │
+│  │  • MCP tool queries: Auto-scaling        │              │
+│  │  • Dashboard refreshes: Auto-scaling     │              │
+│  │  • Ad-hoc analysis: Auto-scaling         │              │
+│  └──────────────────────────────────────────┘              │
+│                                                             │
+│  ┌──────────────────────────────────────────┐              │
+│  │    Model Serving Endpoints (MLflow)      │              │
+│  │  • Fraud model: Auto-scaling (0-10 VMs)  │              │
+│  │  • Embedding service: Auto-scaling       │              │
+│  └──────────────────────────────────────────┘              │
+│                                                             │
+│  ┌──────────────────────────────────────────┐              │
+│  │      Databricks Apps (Streamlit)         │              │
+│  │  • Dashboard app: Serverless             │              │
+│  │  • Auto-scaling based on requests        │              │
+│  └──────────────────────────────────────────┘              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Deployment Environments**
+
+* **Development**: Single-node cluster, sample data subset
+* **Staging**: Production-like, full data pipeline testing
+* **Production**: Multi-node auto-scaling, full data volume
+
+### Security Architecture
+
+**Authentication & Authorization**
+```
+User/Application
+       ↓
+   [Databricks AAD/SSO]
+       ↓
+   [Unity Catalog RBAC]
+       ↓
+   ┌─────────────────────────────────┐
+   │  Catalog: main                  │
+   │  └─ Schema: insurance_claims    │
+   │     ├─ Table: bronze_claims     │  ← SELECT granted to analysts
+   │     ├─ Table: silver_*          │  ← SELECT granted to data_scientists
+   │     └─ Table: gold_*            │  ← SELECT granted to all, MODIFY to admins
+   └─────────────────────────────────┘
+```
+
+**Data Protection**
+
+1. **Encryption**
+   * At-rest: AES-256 (managed by cloud provider)
+   * In-transit: TLS 1.2+
+   * Delta Lake encrypted by default
+
+2. **PII Handling**
+   * Automatic PII detection via Unity Catalog
+   * Column-level masking rules
+   * Redaction in logs and UI
+   * Audit trail for PII access
+
+3. **Audit Logging**
+   ```sql
+   gold_claim_status_audit
+   ├─ claim_id
+   ├─ old_status / new_status
+   ├─ updated_by (user/agent)
+   ├─ update_timestamp
+   ├─ reason
+   └─ ip_address (for compliance)
+   ```
+
+**Network Security**
+* VPC isolation
+* Private endpoints for Unity Catalog
+* API gateway for external integrations
+* Rate limiting on public endpoints
+
+### Scalability & Performance
+
+**Horizontal Scaling**
+* Job clusters auto-scale based on data volume
+* SQL warehouses scale query concurrency
+* Model serving scales inference requests
+* Streamlit app scales with user sessions
+
+**Performance Optimizations**
+1. **Data Partitioning**: Claims partitioned by `filing_date`
+2. **Z-Ordering**: Optimized for `claim_id`, `status`, `is_fraud`
+3. **Caching**: Streamlit caches with TTL (300s-600s)
+4. **Vectorization**: Batch embedding generation
+5. **Query Pushdown**: SQL predicates pushed to Delta Lake
+
+**Monitoring**
+* Databricks SQL query metrics
+* MLflow model performance tracking
+* Application logs in Unity Catalog system tables
+* Custom metrics dashboard (Gold layer)
+
 ## Project Structure
 
 ```
