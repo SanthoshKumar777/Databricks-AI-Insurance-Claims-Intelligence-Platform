@@ -1,19 +1,14 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # DBTITLE 1,Gold Layer - Business Aggregations
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Gold Layer - Business-Level Aggregations
-# MAGIC 
+# MAGIC
 # MAGIC This notebook creates business-ready aggregated tables for:
 # MAGIC * Executive dashboards
 # MAGIC * Fraud alert monitoring
 # MAGIC * Agent performance tracking
 # MAGIC * Claims analytics
-# MAGIC 
+# MAGIC
 # MAGIC All data persisted to Unity Catalog Delta tables in the Lakehouse.
 
 # COMMAND ----------

@@ -15,15 +15,17 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from databricks import sql
 from databricks.sdk import WorkspaceClient
 import json
 from datetime import datetime, timedelta
 import sys
 import os
 
-# Direct import from same directory
-from mcp_server import MCPToolServer
+# Add parent directory to Python path so we can import from src/
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Import MCP server from src folder
+from src.mcp_server import MCPToolServer
 
 # Page configuration
 st.set_page_config(
@@ -48,7 +50,13 @@ st.markdown("""
 
 # Initialize session state
 if 'mcp_server' not in st.session_state:
-    st.session_state.mcp_server = MCPToolServer(catalog="main", schema="insurance_claims")
+    try:
+        st.session_state.mcp_server = MCPToolServer(catalog="main", schema="insurance_claims")
+        st.session_state.server_error = None
+    except Exception as e:
+        st.session_state.mcp_server = None
+        st.session_state.server_error = str(e)
+        print(f"Warning: Could not initialize MCP server: {e}")
 
 if 'investigation_history' not in st.session_state:
     st.session_state.investigation_history = []
@@ -57,32 +65,39 @@ if 'selected_claim' not in st.session_state:
     st.session_state.selected_claim = None
 
 # Helper functions
-@st.cache_data(ttl=300)
 def load_claims_data(filters=None):
     """Load claims data with optional filters."""
     server = st.session_state.mcp_server
-    query = f"SELECT * FROM {server.catalog}.{server.schema}.silver_claims_enriched"
+    if server is None:
+        return pd.DataFrame()  # Return empty dataframe if server not initialized
     
+    # Build WHERE clauses
+    where_clauses = []
     if filters:
-        where_clauses = []
         if filters.get('status'):
             where_clauses.append(f"status = '{filters['status']}'")
-        if filters.get('min_amount'):
+        # Use 'is not None' to handle 0 values correctly
+        if filters.get('min_amount') is not None:
             where_clauses.append(f"claim_amount >= {filters['min_amount']}")
-        if filters.get('max_amount'):
+        if filters.get('max_amount') is not None:
             where_clauses.append(f"claim_amount <= {filters['max_amount']}")
         if filters.get('state'):
             where_clauses.append(f"address_state = '{filters['state']}'")
         if filters.get('fraud_only'):
             where_clauses.append("is_fraud = TRUE")
-        
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
     
-    query += " ORDER BY filing_date DESC LIMIT 500"
+    where_clause = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
     
+    # Try silver_claims_enriched first
+    query = f"SELECT * FROM {server.catalog}.{server.schema}.silver_claims_enriched{where_clause} ORDER BY filing_date DESC LIMIT 500"
     results = server._execute_sql(query)
-    if results and 'error' not in results[0]:
+    
+    # If no results, try bronze_claims as fallback
+    if not results or len(results) == 0 or 'error' in str(results[0]):
+        query = f"SELECT * FROM {server.catalog}.{server.schema}.bronze_claims{where_clause} ORDER BY filing_date DESC LIMIT 500"
+        results = server._execute_sql(query)
+    
+    if results and 'error' not in str(results[0]):
         return pd.DataFrame(results)
     return pd.DataFrame()
 
@@ -90,6 +105,10 @@ def load_claims_data(filters=None):
 def load_analytics_data():
     """Load aggregated analytics data."""
     server = st.session_state.mcp_server
+    if server is None:
+        return {}  # Return empty dict if server not initialized
+    
+    # First try silver_claims_enriched
     query = f"""
     SELECT 
         COUNT(*) as total_claims,
@@ -103,11 +122,32 @@ def load_analytics_data():
     FROM {server.catalog}.{server.schema}.silver_claims_enriched
     """
     results = server._execute_sql(query)
+    
+    # If we got results but they're all zeros/nulls, try bronze_claims as fallback
+    if results and results[0].get('total_claims', 0) == 0:
+        fallback_query = f"""
+        SELECT 
+            COUNT(*) as total_claims,
+            SUM(claim_amount) as total_amount,
+            AVG(claim_amount) as avg_amount,
+            SUM(CASE WHEN is_fraud = 1 THEN 1 ELSE 0 END) as fraud_count,
+            SUM(CASE WHEN is_fraud = 1 THEN claim_amount ELSE 0 END) as fraud_amount,
+            SUM(CASE WHEN status = 'Approved' THEN 1 ELSE 0 END) as approved_count,
+            SUM(CASE WHEN status = 'Denied' THEN 1 ELSE 0 END) as denied_count,
+            SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) as pending_count
+        FROM {server.catalog}.{server.schema}.bronze_claims
+        """
+        fallback_results = server._execute_sql(fallback_query)
+        if fallback_results and fallback_results[0].get('total_claims', 0) > 0:
+            results = fallback_results
+    
     return results[0] if results else {}
 
 def run_agent_investigation(claim_id):
     """Run multi-agent investigation on a claim."""
     server = st.session_state.mcp_server
+    if server is None:
+        return {"error": "MCP Server not initialized"}
     
     results = {
         "claim_id": claim_id,
@@ -254,6 +294,13 @@ def run_agent_investigation(claim_id):
 # Main app
 st.markdown('<p class="main-header">🔍 Insurance Claims Intelligence Platform</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">AI-Powered Claims Investigation & Fraud Detection</p>', unsafe_allow_html=True)
+
+# Show warning if database not connected
+if st.session_state.mcp_server is None:
+    st.warning(
+        "⚠️ **Database Not Connected** - The app is running in demo mode. "
+        "Please set up your Databricks database (main.insurance_claims schema) to access full functionality."
+    )
 
 # Sidebar
 with st.sidebar:
@@ -585,28 +632,34 @@ elif page == "📊 Analytics":
     if ts_results and 'error' not in ts_results[0]:
         ts_df = pd.DataFrame(ts_results)
         
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=ts_df['month'],
-            y=ts_df['claim_count'],
-            mode='lines+markers',
-            name='Total Claims',
-            line=dict(color='blue')
-        ))
-        fig.add_trace(go.Scatter(
-            x=ts_df['month'],
-            y=ts_df['fraud_count'],
-            mode='lines+markers',
-            name='Fraud Claims',
-            line=dict(color='red')
-        ))
-        fig.update_layout(
-            title='Claims Volume Trend',
-            xaxis_title='Month',
-            yaxis_title='Number of Claims',
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        # Check if DataFrame has data and required columns
+        if not ts_df.empty and 'month' in ts_df.columns:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=ts_df['month'],
+                y=ts_df['claim_count'],
+                mode='lines+markers',
+                name='Total Claims',
+                line=dict(color='blue')
+            ))
+            fig.add_trace(go.Scatter(
+                x=ts_df['month'],
+                y=ts_df['fraud_count'],
+                mode='lines+markers',
+                name='Fraud Claims',
+                line=dict(color='red')
+            ))
+            fig.update_layout(
+                title='Claims Volume Trend',
+                xaxis_title='Month',
+                yaxis_title='Number of Claims',
+                hovermode='x unified'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No time series data available.")
+    else:
+        st.info("Unable to load time series data.")
     
     # Feature importance (if available)
     st.subheader("🎯 Fraud Detection Model Insights")
@@ -637,18 +690,24 @@ elif page == "📊 Analytics":
         
         if risk_results and 'error' not in risk_results[0]:
             risk_df = pd.DataFrame(risk_results)
-            risk_df['fraud_rate'] = (risk_df['fraud_count'] / risk_df['total_count'] * 100).round(1)
             
-            fig = px.bar(
-                risk_df,
-                x='factor',
-                y='fraud_rate',
-                title='Fraud Rate by Risk Factor',
-                labels={'fraud_rate': 'Fraud Rate (%)', 'factor': 'Risk Factor'},
-                color='fraud_rate',
-                color_continuous_scale='Reds'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if not risk_df.empty and all(col in risk_df.columns for col in ['factor', 'fraud_count', 'total_count']):
+                risk_df['fraud_rate'] = (risk_df['fraud_count'] / risk_df['total_count'] * 100).round(1)
+                
+                fig = px.bar(
+                    risk_df,
+                    x='factor',
+                    y='fraud_rate',
+                    title='Fraud Rate by Risk Factor',
+                    labels={'fraud_rate': 'Fraud Rate (%)', 'factor': 'Risk Factor'},
+                    color='fraud_rate',
+                    color_continuous_scale='Reds'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No risk factor data available.")
+        else:
+            st.info("Unable to load risk factor data.")
     
     with col2:
         # State distribution
@@ -667,16 +726,22 @@ elif page == "📊 Analytics":
         if state_results and 'error' not in state_results[0]:
             state_df = pd.DataFrame(state_results)
             
-            fig = px.bar(
-                state_df,
-                x='address_state',
-                y='claim_count',
-                title='Top 10 States by Claim Volume',
-                labels={'claim_count': 'Number of Claims', 'address_state': 'State'},
-                color='total_amount',
-                color_continuous_scale='Blues'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Check if DataFrame has required columns
+            if not state_df.empty and all(col in state_df.columns for col in ['address_state', 'claim_count']):
+                fig = px.bar(
+                    state_df,
+                    x='address_state',
+                    y='claim_count',
+                    title='Top 10 States by Claim Volume',
+                    labels={'claim_count': 'Number of Claims', 'address_state': 'State'},
+                    color='total_amount' if 'total_amount' in state_df.columns else None,
+                    color_continuous_scale='Blues'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No state distribution data available.")
+        else:
+            st.info("Unable to load state distribution data.")
 
 # Footer
 st.divider()
@@ -685,3 +750,22 @@ st.caption(
     "Powered by Databricks Lakehouse, MLflow, and Streamlit | "
     f"MCP Server: {len(st.session_state.mcp_server.list_tools()['tools'])} tools available"
 )
+if __name__ == '__main__':
+    # Streamlit app launcher
+    # This allows running the app with: python app.py
+    # Instead of: streamlit run app.py
+    import subprocess
+    import sys
+    
+    print("🚀 Launching Insurance Claims Intelligence Platform...")
+    print("📍 Running on Databricks")
+    print("🔧 Using MCP Server for AI investigation")
+    print("\n" + "="*60)
+    
+    # Launch Streamlit server
+    subprocess.run([
+        sys.executable, "-m", "streamlit", "run", 
+        __file__,
+        "--server.port=8080",
+        "--server.address=0.0.0.0"
+    ])

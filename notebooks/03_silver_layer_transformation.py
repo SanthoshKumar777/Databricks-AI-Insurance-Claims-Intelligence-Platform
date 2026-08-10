@@ -1,13 +1,8 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # DBTITLE 1,Silver Layer - Data Transformation & Feature Engineering
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Silver Layer - Data Transformation & Feature Engineering
-# MAGIC 
+# MAGIC
 # MAGIC This notebook transforms Bronze layer data into clean, enriched Silver tables with:
 # MAGIC * Data quality rules and validations
 # MAGIC * Business logic transformations

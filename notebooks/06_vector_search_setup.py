@@ -1,24 +1,14 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# dependencies = [
-#   "databricks-vectorsearch",
-#   "sentence-transformers",
-#   "scikit-learn",
-# ]
-# ///
 # DBTITLE 1,Vector Search Setup
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Vector Search Setup for Claim Similarity
-# MAGIC 
+# MAGIC
 # MAGIC This notebook:
 # MAGIC * Generates embeddings for claim descriptions using sentence transformers
 # MAGIC * **Stores embeddings in Unity Catalog Delta tables (Lakehouse)**
 # MAGIC * Creates Databricks Vector Search index
 # MAGIC * Enables semantic similarity search for fraud detection
-# MAGIC 
+# MAGIC
 # MAGIC All embeddings are persisted in the Lakehouse for:
 # MAGIC * Durability and versioning
 # MAGIC * Audit trails

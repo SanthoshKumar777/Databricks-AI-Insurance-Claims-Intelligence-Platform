@@ -1,0 +1,10 @@
+command:
+  - streamlit
+  - run
+  - app/app.py
+
+env:
+  - name: CATALOG
+    value: main
+  - name: SCHEMA
+    value: insurance_claims

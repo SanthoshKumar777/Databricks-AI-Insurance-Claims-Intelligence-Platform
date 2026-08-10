@@ -1,13 +1,8 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # DBTITLE 1,ML Fraud Detection Model
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # ML Fraud Detection Model Training
-# MAGIC 
+# MAGIC
 # MAGIC This notebook trains an XGBoost fraud detection model with:
 # MAGIC * Feature engineering from Silver layer
 # MAGIC * Model training with hyperparameter tuning

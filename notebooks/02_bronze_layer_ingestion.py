@@ -1,15 +1,10 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # DBTITLE 1,Bronze Layer - Raw Data Ingestion
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Bronze Layer - Raw Data Ingestion
-# MAGIC 
+# MAGIC
 # MAGIC This notebook validates and persists raw insurance claims data into the Bronze layer.
-# MAGIC 
+# MAGIC
 # MAGIC ## Bronze Layer Characteristics:
 # MAGIC * Raw, unprocessed data
 # MAGIC * Schema validation

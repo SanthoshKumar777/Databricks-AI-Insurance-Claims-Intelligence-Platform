@@ -1,15 +1,10 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # DBTITLE 1,Setup and Configuration
-# Databricks notebook source
 # MAGIC %md
 # MAGIC # Insurance Claims Synthetic Data Generation
-# MAGIC 
+# MAGIC
 # MAGIC This notebook generates realistic insurance claims data with embedded fraud patterns.
-# MAGIC 
+# MAGIC
 # MAGIC ## Features:
 # MAGIC * Realistic claim distributions
 # MAGIC * Multiple fraud patterns (billing inflation, staged accidents, duplicate claims)
